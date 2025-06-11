@@ -1,0 +1,317 @@
+# @cython.cdivision(True)
+# @cython.boundscheck(False)
+# @cython.wraparound(False)
+def prob_symm2(CFLOAT32_t[:] Es0, CFLOAT32_t[:] As0, CUINT8_t[:] ns0, CUINT64_t[:] codes0, CINT32_t i0,
+               CFLOAT32_t[:] Es1, CFLOAT32_t[:] As1, CUINT8_t[:] ns1, CUINT64_t[:] codes1, CINT32_t j0, CUINT8_t pself, CINT32_t shape0, CINT32_t shape1,
+               CUINT8_t mmax, CFLOAT32_t density, CFLOAT32_t min_simil, CFLOAT32_t min_prob, CFLOAT32_t _pmtc, CFLOAT32_t _plm,
+               CFLOAT32_t[:] bok_e, CFLOAT32_t[:] bok_de, CFLOAT32_t[:] bok_a, CFLOAT32_t[:,:] pok_ede, CFLOAT32_t[:] pok_a,
+               CFLOAT32_t[:] bms_e, CFLOAT32_t[:] bms_de, CFLOAT32_t[:] bms_a, CFLOAT32_t[:] pms_e, CFLOAT32_t[:] pms_de, CFLOAT32_t[:] pms_a,
+               CFLOAT32_t[:] bno_e, CFLOAT32_t[:] bno_de, CFLOAT32_t[:] bno_a, CFLOAT32_t[:] pno_e, CFLOAT32_t[:] pno_de, CFLOAT32_t[:] pno_a):
+
+  cidx0 = np.insert(np.cumsum(ns0,dtype=np.int32),0,0)
+  cdef CINT32_t[:] _cidx0_ = cidx0
+  cidx1 = np.insert(np.cumsum(ns1,dtype=np.int32),0,0)
+  cdef CINT32_t[:] _cidx1_ = cidx1
+
+  cdef Py_ssize_t len0 = len(ns0)
+  assert len0 < 2**32
+  assert len(Es0) == sum(ns0)
+  assert len0 == len(codes0)
+  assert max(ns0) <= 255
+
+  cdef Py_ssize_t len1 = len(ns1)
+  assert len1 < 2**32
+  assert len(Es1) == sum(ns1)
+  assert len1 == len(codes1)
+  assert max(ns1) <= 255
+
+  assert len(bok_e) == pok_ede.shape[0]
+  assert len(bok_de) == pok_ede.shape[1]
+  assert len(bok_a) == len(pok_a)
+
+  assert len(bms_e) == len(pms_e)
+  assert len(bms_de) == len(pms_de)
+  assert len(bms_a) == len(pms_a)
+
+  assert len(bno_e) == len(pno_e)
+  assert len(bno_de) == len(pno_de)
+  assert len(bno_a) == len(pno_a)
+
+  cdef CUINT64_t nMax = CUINT64(np.ceil(density*len0*len1))
+
+  indptr = np.zeros(shape0+1, dtype=CUINT64)
+  cdef CUINT64_t[:] _indptr_ = indptr
+
+  indices = np.full(nMax, -1, dtype=CINT32)
+  cdef CINT32_t[:] _indices_ = indices
+
+  data = np.full_like(indices, 0, dtype=CFLOAT32)
+  cdef CFLOAT32_t[:] _data_ = data
+
+  nbit0 = _nbits64(codes0)
+  cdef CFLOAT32_t[:] _nbit0_ = nbit0
+  nbit1 = _nbits64(codes1)
+  cdef CFLOAT32_t[:] _nbit1_ = nbit1
+
+  dEs0 = np.zeros(mmax, dtype=CFLOAT32)
+  cdef CFLOAT32_t[:] _dEs0_ = dEs0
+  dEs1 = np.zeros(mmax, dtype=CFLOAT32)
+  cdef CFLOAT32_t[:] _dEs1_ = dEs1
+
+  mtc0 = np.full(mmax, -1, dtype=CINT32)
+  cdef CINT32_t[:] _mtc0_ = mtc0
+  mtc1 = np.full(mmax, -1, dtype=CINT32)
+  cdef CINT32_t[:] _mtc1_ = mtc1
+
+  cdef CUINT64_t iseq=0
+  cdef CINT32_t i, j, k, ret, nM, nH, nmH, nmL
+  cdef CFLOAT32_t pout, prb
+  cdef CFLOAT64_t pok, pms, pno, tmp, den, plm=_plm, pmtc=_pmtc
+  cdef CINT32_t nok_e = <CINT32_t>len(bok_e),  nok_de = <CINT32_t>len(bok_de),  nok_a = <CINT32_t>len(bok_a)
+  cdef CINT32_t nms_e = <CINT32_t>len(bms_e),  nms_de = <CINT32_t>len(bms_de),  nms_a = <CINT32_t>len(bms_a)
+  cdef CINT32_t nno_e = <CINT32_t>len(bno_e),  nno_de = <CINT32_t>len(bno_de),  nno_a = <CINT32_t>len(bno_a)
+
+  cdef CFLOAT32_t dx_ok = <CFLOAT32_t>np.mean(np.diff(bok_e))
+  cdef CFLOAT32_t dy_ok = <CFLOAT32_t>np.mean(np.diff(bok_de))
+
+  for i in range(len0):
+    for j in range(len1):
+      if pself and (j0+j <= i0+i): continue
+
+      if _2*bits_count(codes0[i]&codes1[j])/(_nbit0_[i]+_nbit1_[j]) < min_simil: continue
+
+      ret = _match_pair(Es0, _cidx0_[i], ns0[i], Es1, _cidx1_[j], ns1[j], _dEs0_, _dEs1_, _mtc0_, _mtc1_)
+      if ret < 0: return -1
+
+      nM = 0
+      pok = 1.
+      pms = 1.
+      pno = 1.
+      for k in range(ns0[i]):
+        _interp2d((Es0[_cidx0_[i]+k]+Es1[_cidx1_[j]+_mtc0_[k]])/_2, _dEs0_[k], bok_e, bok_de, pok_ede, nok_e, nok_de, dx_ok, dy_ok, &pout)
+        pok *= <CFLOAT64_t>pout
+        _interp1d(As0[_cidx0_[i]+k], bok_a, pok_a, nok_a, &pout)
+        pok *= <CFLOAT64_t>pout
+        _interp1d(As1[_cidx1_[j]+_mtc0_[k]], bok_a, pok_a, nok_a, &pout)
+        pok *= <CFLOAT64_t>pout
+
+        _interp1d(abs(_dEs0_[k]), bms_de, pms_de, nms_de, &pout)
+        pms *= <CFLOAT64_t>pout
+        _interp1d(Es0[_cidx0_[i]+k], bms_e, pms_e, nms_e, &pout)
+        pms *= <CFLOAT64_t>pout
+        _interp1d(As0[_cidx0_[i]+k], bms_a, pms_a, nms_a, &pout)
+        pms *= <CFLOAT64_t>pout
+        _interp1d(As1[_cidx1_[j]+_mtc0_[k]], bms_a, pms_a, nms_a, &pout)
+        pms *= <CFLOAT64_t>pout
+
+        _interp1d(abs(_dEs0_[k]), bno_de, pno_de, nno_de, &pout)
+        pno *= <CFLOAT64_t>pout
+        _interp1d(Es0[_cidx0_[i]+k], bno_e, pno_e, nno_e, &pout)
+        pno *= <CFLOAT64_t>pout
+        _interp1d(As0[_cidx0_[i]+k], bno_a, pno_a, nno_a, &pout)
+        pno *= <CFLOAT64_t>pout
+        _interp1d(As1[_cidx1_[j]+_mtc0_[k]], bno_a, pno_a, nno_a, &pout)
+        pno *= <CFLOAT64_t>pout
+
+      for k in range(ns1[j]):
+        _interp2d((Es0[_cidx0_[i]+_mtc1_[k]]+Es1[_cidx1_[j]+k])/_2, _dEs1_[k], bok_e, bok_de, pok_ede, nok_e, nok_de, dx_ok, dy_ok, &pout)
+        pok *= <CFLOAT64_t>pout
+        _interp1d(As1[_cidx1_[j]+k], bok_a, pok_a, nok_a, &pout)
+        pok *= <CFLOAT64_t>pout
+        _interp1d(As0[_cidx0_[i]+_mtc1_[k]], bok_a, pok_a, nok_a, &pout)
+        pok *= <CFLOAT64_t>pout
+
+        _interp1d(abs(_dEs1_[k]), bms_de, pms_de, nms_de, &pout)
+        pms *= <CFLOAT64_t>pout
+        _interp1d(Es1[_cidx1_[j]+k], bms_e, pms_e, nms_e, &pout)
+        pms *= <CFLOAT64_t>pout
+        _interp1d(As0[_cidx0_[i]+_mtc1_[k]], bms_a, pms_a, nms_a, &pout)
+        pms *= <CFLOAT64_t>pout
+        _interp1d(As1[_cidx1_[j]+k], bms_a, pms_a, nms_a, &pout)
+        pms *= <CFLOAT64_t>pout
+
+        _interp1d(abs(_dEs1_[k]), bno_de, pno_de, nno_de, &pout)
+        pno *= <CFLOAT64_t>pout
+        _interp1d(Es1[_cidx1_[j]+k], bno_e, pno_e, nno_e, &pout)
+        pno *= <CFLOAT64_t>pout
+        _interp1d(As0[_cidx0_[i]+_mtc1_[k]], bno_a, pno_a, nno_a, &pout)
+        pno *= <CFLOAT64_t>pout
+        _interp1d(As1[_cidx1_[j]+k], bno_a, pno_a, nno_a, &pout)
+        pno *= <CFLOAT64_t>pout
+
+      tmp = plm*pok + (1-plm)*pms
+      den = pmtc*tmp + (1-pmtc)*pno
+
+      if den==0.: prb = _0
+      else:       prb = <CFLOAT32_t>(tmp*pmtc/den)
+
+      if prb < min_prob: continue
+
+      _data_[iseq] = prb
+      _indices_[iseq] = j0+j
+      iseq += 1
+      if iseq >= nMax: return -2
+        
+    _indptr_[i0+i+1] = iseq
+
+  _indptr_[i0+i+1:] = iseq
+
+  return csr_array((data[:iseq], indices[:iseq], indptr), (shape0, shape1))
+# -------
+
+
+
+
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef CINT32_t _fprob(CFLOAT32_t[:] Es0, CINT32_t cidx0, CUINT8_t _n0, CFLOAT32_t[:] Es1, CINT32_t cidx1, CUINT8_t _n1,
+                     CFLOAT32_t max_dE, CFLOAT32_t ratio_miss, CFLOAT32_t pmtc, PinfoStrct* pinfo, CFLOAT32_t* pret,
+                     CFLOAT32_t[:] dEs0, CFLOAT32_t[:] dEs1, CINT32_t[:] mtc0, CINT32_t[:] mtc1, CFLOAT32_t[:] plm, CFLOAT32_t[:] plx):
+
+  cdef CINT32_t k, ret, cnt, max_m, nH, nM, nm, nm0, nm1, n0=_n0, n1=_n1, ny=pinfo[0].mmax+1
+  cdef CFLOAT32_t pok, pno, ptmp, num, den
+
+  ret = _match_pair_ps(Es0, cidx0, _n0, Es1, cidx1, _n1, max_dE, plm, plx, &cnt, &nM, &nm0, &nm1, pinfo, dEs0, dEs1, mtc0, mtc1)
+
+  nH = min(max(nM+nm0,nM+nm1), pinfo[0].nmax)
+  nm = min(nm0+nm1, pinfo[0].mmax)
+  max_m = max(1,<CINT32_t>round((<CFLOAT32_t>(nM+nM+nm0+nm1))/ratio_miss))
+  
+  if nm>max_m:
+    pret[0] = _0
+    return 0
+  
+  if nm>=max_m-1:
+    pok = pinfo.Pok_miss[nH*ny+nm]
+    pno = pinfo.Pno_miss[nH*ny+nm]
+    for k in range(cnt):
+      pok *= plm[k]
+      pno *= plx[k]
+      
+  else:
+    pno = pinfo[0].Pno_miss[nH*ny+nm]
+    for k in range(cnt): pno *= plx[k]
+
+    pok = _0
+    # kx is number of couples of matched lines that can be missed
+    for k in range((max_m-nm)//2+1):
+      _comb_prod(plm, plx, cnt, k, &ptmp)
+      if ret<0: return -3
+      pok += ptmp*pinfo[0].Pok_miss[nH*ny+min(nm+2*k, pinfo[0].mmax)]
+
+  num = pok*pmtc
+  den = num + (_1-pmtc)*pno
+  if den == _0:
+    pret[0] = _0
+  else:
+    num = num/den
+    if num>_1: return -4
+    pret[0] = num
+
+  return 0
+# -------
+
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef CINT32_t _fprob_1in0(CFLOAT32_t[:] Es0, CINT32_t cidx0, CUINT8_t _n0, CFLOAT32_t[:] Es1, CINT32_t cidx1, CUINT8_t _n1,
+                          CFLOAT32_t max_dE, CFLOAT32_t ratio_miss, CFLOAT32_t pmtc, PinfoStrct* pinfo, CFLOAT32_t* pret,
+                          CFLOAT32_t[:] dEs0, CFLOAT32_t[:] dEs1, CINT32_t[:] mtc0, CINT32_t[:] mtc1, CFLOAT32_t[:] plm, CFLOAT32_t[:] plx):
+
+  cdef CINT32_t k, ret, cnt, max_m, nH, nM, nm, nm0, nm1, n0=_n0, n1=_n1, ny=pinfo[0].mmax+1
+  cdef CFLOAT32_t pok, pno, ptmp, num, den
+
+  ret = _match_pair_ps(Es0, cidx0, _n0, Es1, cidx1, _n1, max_dE, plm, plx, &cnt, &nM, &nm0, &nm1, pinfo, dEs0, dEs1, mtc0, mtc1)
+
+  nH = min(nM+nm1, pinfo[0].nmax)
+  nm = min(nm1, pinfo[0].mmax//2)
+  max_m = max(1,<CINT32_t>round((<CFLOAT32_t>(nH))/ratio_miss))
+  
+  if nm>max_m:
+    pret[0] = _0
+    return 0
+  
+  if nm>=max_m-1:
+    pok = pinfo.Pok_miss[nH*ny+nm*2]
+    pno = pinfo.Pno_miss[nH*ny+nm*2]
+    for k in range(cnt):
+      pok *= plm[k]
+      pno *= plx[k]
+      
+  else:
+    pno = pinfo[0].Pno_miss[nH*ny+nm*2]
+    for k in range(cnt): pno *= plx[k]
+
+    pok = _0
+    # kx is number of couples of matched lines that can be missed
+    for k in range(max_m-nm+1):
+      _comb_prod(plm, plx, cnt, k, &ptmp)
+      if ret<0: return -3
+      pok += ptmp*pinfo[0].Pok_miss[nH*ny+min(2*(nm+k), pinfo[0].mmax)]
+
+  num = pok*pmtc
+  den = num + (_1-pmtc)*pno
+  if den == _0:
+    pret[0] = _0
+  else:
+    num = num/den
+    if num>_1: return -4
+    pret[0] = num
+
+  return 0
+# -------
+
+
+
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef CINT32_t _calc_prob2(CFLOAT32_t* plm, CFLOAT32_t* plx, CFLOAT32_t* pok_miss, CFLOAT32_t* pno_miss, CFLOAT32_t pmtc,
+                          CINT32_t nm, CINT32_t cnt, CINT32_t max_miss, CINT32_t mmax, CFLOAT32_t* pret,
+                          CFLOAT32_t* cok_miss, CFLOAT32_t* cno_miss, CINT32_t* cn, CFLOAT32_t* poks, CFLOAT32_t* pnos):
+  cdef CFLOAT32_t pok, pno, ptmp, num, den
+  cdef CINT32_t k, ret
+
+  if nm>max_miss:
+    pret[0] = _0
+    cn[0] = 0
+    return 0
+  
+  if nm>=max_miss-1:
+    cn[0] = 1
+    pok = pok_miss[nm]
+    pno = pno_miss[nm]
+
+    cok_miss[0] = pok
+    for k in range(cnt):
+      pok *= plm[k]
+      pno *= plx[k]
+    poks[0] = pok/cok_miss[0]
+
+  else:
+    pno = pno_miss[nm]
+    for k in range(cnt): pno *= plx[k]
+
+    pok = _0
+    # kx is number of couples of matched lines that can be missed
+    cn[0] = 0
+    for k in range((max_miss-nm)//2+1):
+      ret = _comb_prod(plm, plx, cnt, k, &ptmp)
+      if ret<0: return ret-10
+      poks[cn[0]] = ptmp
+      cok_miss[cn[0]] = pok_miss[min(nm+2*k, mmax)]
+      pok += ptmp*pok_miss[min(nm+2*k, mmax)]
+      cn[0] += 1
+
+  cno_miss[0] = pno_miss[nm]
+  pnos[0] = pno/cno_miss[0]
+
+  num = pok*pmtc
+  den = num + (_1-pmtc)*pno
+  if den == _0:  pret[0] = _0
+  else:          pret[0] = num/den
+  if pret[0]>_1: return -3
+
+  return 0
+# -------

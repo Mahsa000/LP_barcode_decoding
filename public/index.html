@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>CC Analysis Demo</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+    #plots-container,
+    #showMatchedPlots-container {
+      width: 90%;
+      max-height: 600px;
+      overflow-y: scroll;
+      border: 1px solid #ccc;
+      margin-top: 1rem;
+      padding: 1rem;
+      border-radius: 5px;
+      background-color: #f9f9f9;
+    }
+    button {
+      padding: 6px 12px;
+      margin: 4px;
+      cursor: pointer;
+      border: none;
+      border-radius: 3px;
+      background-color: #007BFF;
+      color: white;
+      transition: background-color 0.3s ease;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    .section {
+      margin-bottom: 2rem;
+    }
+    .section h3 {
+      margin-bottom: 0.5rem;
+    }
+    .input-group {
+      margin-bottom: 0.5rem;
+    }
+    .input-group label {
+      margin-right: 0.5rem;
+    }
+    .button-group {
+      margin-bottom: 1rem;
+    }
+    @media (max-width: 768px) {
+      #plots-container,
+      #showMatchedPlots-container {
+        width: 100%;
+      }
+      button {
+        width: 100%;
+        margin: 8px 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>CC Analysis Control Panel</h1>
+  
+  <!-- Data Management Section -->
+  <div class="section">
+    <h3>1. Data Management</h3>
+    <div class="input-group">
+      <label for="rawDataPath">Input Raw Data Path:</label>
+      <input type="text" id="rawDataPath" value="/Users/mahsazarei/LASE_VIS/LASE_data/250207" />
+    </div>
+    <div class="input-group">
+      <label for="digitPrefix">Digit Prefix:</label>
+      <input type="text" id="digitPrefix" placeholder="e.g. 'cycle' or 'A'" />
+    </div>
+    <div class="input-group">
+      <label for="inputAreaCode">Area Selection:</label>
+      <input type="number" id="inputAreaCode" placeholder="None" />
+    </div>
+    <div class="button-group">
+      <button id="btnAnalyzeRaw">Analyze Raw Data</button>
+    </div>
+    <hr/>
+    
+    <!-- Load and Filter Data Section -->
+    <div class="section">
+      <h3>2. Analyze/Load and Filter New Analyzed Data</h3>
+      <div class="input-group">
+        <label for="analyzedDataPath">Analyzed Data Path:</label>
+        <input type="text" id="analyzedDataPath" value="/Users/mahsazarei/LASE_VIS/LASE_data/250207" />
+      </div>
+        <!-- NEW: Manual group entry -->
+      <div class="input-group">
+        <label for="loadGroupName">Group Name:</label>
+        <input type="text" id="loadGroupName" placeholder="e.g. grp_0" />
+      </div
+      
+      <div class="input-group">
+        <label for="loadAreaSelection">Area Selection:</label>
+        <input type="number" id="loadAreaSelection" placeholder="None" />
+      </div>
+      <div class="input-group">
+        <label for="loadDigitPrefix">Digit Prefix:</label>
+        <input type="text" id="loadDigitPrefix" placeholder="Optional" />
+      </div>
+      <div class="button-group">
+        <button id="btnLoadFilter">Load and Filter Data</button>
+      </div>
+    </div>
+
+    <!-- Data Management Section -->
+    <!-- <div class="section">
+      <h3>1. Data Management</h3>
+      <div class="input-group">
+        <label for="rawDataPath">Input Raw Data Path:</label>
+        The default value will be overwritten by localStorage if available -->
+        <!-- <input type="text" id="rawDataPath" value="/Users/mahsazarei/LASE_VIS/LASE_data/250207" />
+      </div>
+      <div class="input-group">
+        <label for="digitPrefix">Digit Prefix:</label>
+        <input type="text" id="digitPrefix" placeholder="e.g. 'cycle' or 'A'" />
+      </div>
+      <div class="input-group">
+        <label for="inputAreaCode">Area Selection:</label>
+        <input type="number" id="inputAreaCode" placeholder="None" />
+      </div>
+      <div class="button-group">
+        <button id="btnAnalyzeRaw">Analyze Raw Data</button>
+      </div> -->
+      <!-- <hr/> -->
+      
+      <!-- Load and Filter Data Section -->
+      <!-- <div class="section">
+        <h3>2. Analyze/Load and Filter New Analyzed Data</h3>
+        <div class="input-group">
+          <label for="analyzedDataPath">Analyzed Data Path:</label>
+          <input type="text" id="analyzedDataPath" value="/Users/mahsazarei/LASE_VIS/LASE_data/250207" />
+        </div>
+        <div class="input-group">
+          <label for="loadAreaSelection">Area Selection:</label>
+          <input type="number" id="loadAreaSelection" placeholder="None" />
+        </div>
+        <div class="input-group">
+          <label for="loadDigitPrefix">Digit Prefix:</label>
+          <input type="text" id="loadDigitPrefix" placeholder="Optional" />
+        </div>
+        <div class="input-group"> -->
+          <!-- Change this ID to match what you use in JavaScript -->
+          <!-- <label for="inputOutputFolder">Output Name:</label>
+          <input type="text" id="inputOutputFolder" value="/Users/mahsazarei/LASE_VIS/LASE_data/250207" />
+        </div>
+        <div class="button-group">
+          <button id="btnLoadFilter">Load and Filter Data</button>
+        </div>
+      </div>
+    </div> -->
+
+    
+    <!-- Output Folder Input -->
+    <div class="input-group">
+      <label for="inputOutputFolder">Output CC and MID Path:</label>
+      <input type="text" id="inputOutputFolder" name="output_cc_path" value="output" />
+    </div>
+    
+    <!-- Buttons for Finding & Matching Connected Components -->
+    <div class="button-group">
+      <button id="btnFindCC">Find Connected Components (Labels)</button>
+      <button id="btnMatchCC">Match Connected Components</button>
+    </div>
+  </div>
+  
+  <hr/>
+  
+  <!-- Show Matched Connected Component Section -->
+  <div class="section">
+    <h3>Show Matched Connected Component</h3>
+    <div class="input-group">
+      <label for="showMatchedSample">Sample Name:</label>
+      <select id="showMatchedSample" name="showMatchedSample" required>
+        <option value="" disabled selected>Select a sample</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label for="showMatchedLabelIndex">Label Index:</label>
+      <input type="number" id="showMatchedLabelIndex" value="1" />
+    </div>
+    <div class="button-group">
+      <button id="btnShowMatchedPrev" disabled>← Prev</button>
+      <button id="btnShowMatchedNext" disabled>Next →</button>
+      <button id="btnShowMatched">Show Matched CC</button>
+    </div>
+    <div id="showMatchedPlots-container"></div>
+    <div id="showMatchedButtons-container"></div>
+    <p id="showMatchedResult"></p>
+  </div>
+
+  <hr/>
+  
+  <!-- Iterate Over Labels Section -->
+  <!-- <div class="section"> -->
+  <div class="section" id="iterSection">
+    <h3>4. Iterate Over Labels (Single-Label or Multi-Label)</h3>
+    <div class="input-group">
+      <label for="iterSample">Sample Name:</label>
+      <select id="iterSample" name="iterSample" required>
+        <option value="" disabled selected>Select a sample</option>
+      </select>
+    </div>
+    <!-- NEW: Minimum MID Count Input -->
+    <div class="input-group">
+      <label for="min_mid_count">Min MID Count:</label>
+      <input type="number" id="min_mid_count" name="min_mid_count" placeholder="(e.g. 3)" />
+      <small>(Only show labels if at least one MID has this many entries)</small>
+    </div>
+
+    <div class="input-group">
+      <label for="iterLabelIndex">Label Index:</label>
+      <input type="number" id="iterLabelIndex" name="iterLabelIndex" placeholder="(e.g. 1)" />
+      <small>(Leave blank for multi-label mode)</small>
+    </div>
+    <div class="input-group">
+      <label for="min_mids_per_label">Min # of MIDs/Label:</label>
+      <input type="number" id="min_mids_per_label" name="min_mids_per_label" placeholder="(e.g. 2)" />
+      <small>(Leave blank for single-label mode)</small>
+    </div>
+
+    <!-- NEW: Desired MID -->
+    <div class="input-group">
+      <label for="desiredMid">Desired MID:</label>
+      <input type="number" id="desiredMid" name="desiredMid" placeholder="(e.g. 123)" />
+      <small>(Optional; only show labels containing this MID)</small>
+    </div>
+    <!-- END NEW PART -->
+
+    <div class="input-group">
+      <label for="max_samples">Max # of Samples:</label>
+      <input type="number" id="max_samples" name="max_samples" value="2" min="1" style="width:60px;" required />
+    </div>
+    <div class="input-group">
+      <label for="use_modified_data">Use Modified Data:</label>
+      <input type="checkbox" id="use_modified_data" name="use_modified_data" value="true" />
+    </div>
+    <div class="input-group">
+      <label for="save_all_changes">Save All Changes:</label>
+      <input type="checkbox" id="save_all_changes" name="save_all_changes" value="true" />
+    </div>
+    <div class="button-group">
+      <button type="button" id="btnIterPlot">Generate Plot</button>
+    </div>
+    <!-- New Label-Level Actions (visible in single-label mode) -->
+    <div class="button-group">
+      <button type="button" id="btnApplyLabelChanges">Apply Changes for This Label</button>
+      <button type="button" id="btnDiscardLabelChanges">Discard Changes for This Label</button>
+    </div>
+    <div id="plots-container"></div>
+    <p id="iterResult"></p>
+  </div>
+  <hr/>
+
+  <!-- Include the frontend JS logic -->
+  <script src="frontendCalls3.js"></script>
+  <script>
+    // Bind the new label-level action buttons (single-label mode)
+    document.addEventListener('DOMContentLoaded', () => {
+      const btnApplyLabelChanges = document.getElementById('btnApplyLabelChanges');
+      const btnDiscardLabelChanges = document.getElementById('btnDiscardLabelChanges');
+      const iterSampleEl = document.getElementById('iterSample');
+      const iterLabelIndexEl = document.getElementById('iterLabelIndex');
+
+      if (btnApplyLabelChanges) {
+        btnApplyLabelChanges.addEventListener('click', () => {
+          const sampleName = iterSampleEl.value;
+          const labelVal = iterLabelIndexEl.value;
+          if (!sampleName || !labelVal) {
+            alert('Please select a sample and provide a label index.');
+            return;
+          }
+          applyLabelChanges(sampleName, labelVal);
+        });
+      }
+
+      if (btnDiscardLabelChanges) {
+        btnDiscardLabelChanges.addEventListener('click', () => {
+          const sampleName = iterSampleEl.value;
+          const labelVal = iterLabelIndexEl.value;
+          if (!sampleName || !labelVal) {
+            alert('Please select a sample and provide a label index.');
+            return;
+          }
+          discardLabelChanges(sampleName, labelVal);
+        });
+      }
+    });
+  </script>
+</body>
+</html>

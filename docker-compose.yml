@@ -1,0 +1,45 @@
+# services:
+#   backend:
+#     build:
+#       context: ./FastAPI
+#     ports:
+#       - "8000:8000"
+#   frontend:
+#     build:
+#       context: .
+#     ports:
+#       - "3006:3006"
+
+services:
+  backend:
+    build:
+      context: ./FastAPI
+    ports:
+      - "8000:8000"
+    volumes:
+      # host-folder with ALL data  →  /data inside container
+      - /Users/mahsazarei/LASE_VIS/LASE_data:/data:ro
+      # (optional) live-code reload
+      - ./FastAPI:/app
+
+  frontend:
+    build:
+      context: .
+    ports:
+      - "3006:3006"
+    environment:
+      - BACKEND_URL=http://backend:8000
+
+# services:
+#   backend:
+#     build:
+#       context: ./FastAPI
+#     volumes:
+#       - ./FastAPI:/app
+#     ports:
+#       - "8000:8000"
+#   frontend:
+#     build:
+#       context: .
+#     ports:
+#       - "3006:3006"
